@@ -158,7 +158,10 @@
         <div id="screen-game" class="hidden">
             <!-- Stats -->
             <div class="flex justify-between items-center mb-6 bg-gray-900/80 p-3 rounded-lg border border-fuchsia-900">
-                <div class="text-lg">Skor: <span id="score" class="text-fuchsia-400 font-bold text-2xl teko-font">0</span></div>
+                <div class="text-lg flex items-center gap-2">
+                    <span>Skor: <span id="score" class="text-fuchsia-400 font-bold text-2xl teko-font">0</span></span>
+                    <span id="combo-display" class="text-orange-500 text-lg teko-font hidden opacity-0 transition-all duration-300 transform">🔥 Combo x<span id="combo-count">1</span></span>
+                </div>
                 <div class="text-lg">Nyawa: <span id="lives" class="text-red-500 text-xl">❤️❤️❤️</span></div>
             </div>
 
@@ -221,8 +224,35 @@
         let currentCorrectSong = null;
         let score = 0;
         let lives = 3;
+        let combo = 0;
         let isPlaying = false;
         let optionsLocked = false;
+
+        // --- Sound Effects (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const sfx = {
+            playTone: (freq, type, duration, vol=0.1, slideFreq=null) => {
+                if(audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            },
+            correct: () => {
+                sfx.playTone(400, 'sine', 0.1, 0.2, 600);
+                setTimeout(() => sfx.playTone(600, 'sine', 0.2, 0.2, 800), 100);
+            },
+            wrong: () => sfx.playTone(150, 'sawtooth', 0.4, 0.2, 50),
+            gameOver: () => sfx.playTone(200, 'sawtooth', 1, 0.3, 20),
+            click: () => sfx.playTone(800, 'square', 0.05, 0.02)
+        };
 
         // --- DOM Elements ---
         const screens = {
@@ -241,21 +271,42 @@
         const optionsContainer = document.getElementById('options-container');
         const feedbackEl = document.getElementById('feedback');
         const scoreEl = document.getElementById('score');
+        const comboDisplay = document.getElementById('combo-display');
+        const comboCountEl = document.getElementById('combo-count');
         const livesEl = document.getElementById('lives');
         const finalScoreEl = document.getElementById('final-score');
 
         // --- Init & Fetch Data ---
         async function fetchPhonkData() {
             try {
-                // Search for phonk, drift phonk, etc. We use a large limit to get variety
-                const searchTerm = encodeURIComponent("drift phonk");
-                const url = `https://itunes.apple.com/search?term=${searchTerm}&media=music&limit=150`;
+                // Search multiple terms to get diverse songs
+                const terms = ["drift phonk", "brazilian phonk", "sigma phonk"];
+                let allResults = [];
                 
-                const response = await fetch(url);
-                const data = await response.json();
+                for(let term of terms) {
+                    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&limit=100`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    allResults = allResults.concat(data.results);
+                }
                 
-                // Filter only songs that have a previewUrl
-                songs = data.results.filter(track => track.previewUrl && track.trackName);
+                // Filter unique songs strictly to avoid similar titles
+                const seenNames = new Set();
+                songs = [];
+
+                for(let track of allResults) {
+                    if (!track.previewUrl || !track.trackName) continue;
+                    
+                    // Normalize name (remove feat, brackets, make lowercase, keep only alphanumeric)
+                    let cleanName = track.trackName.replace(/(\(.*?\)|\[.*?\])/g, '').trim().toLowerCase();
+                    let strictName = cleanName.replace(/[^a-z0-9]/g, '');
+
+                    // Only add if we haven't seen a very similar name before
+                    if (!seenNames.has(strictName) && strictName.length > 2) {
+                        seenNames.add(strictName);
+                        songs.push(track);
+                    }
+                }
                 
                 if(songs.length < 10) {
                     throw new Error("Tidak cukup lagu ditemukan.");
@@ -274,8 +325,10 @@
 
         // --- Game Logic ---
         function startGame() {
+            sfx.click();
             score = 0;
             lives = 3;
+            combo = 0;
             updateStatsUI();
             showScreen('game');
             loadNextQuestion();
@@ -326,7 +379,10 @@
                     <span class="text-xs text-gray-400 truncate w-full block">${song.artistName}</span>
                 `;
                 
-                btn.onclick = () => handleGuess(song, btn);
+                btn.onclick = () => {
+                    sfx.click();
+                    handleGuess(song, btn);
+                };
                 optionsContainer.appendChild(btn);
             });
         }
@@ -356,10 +412,15 @@
 
             if (isCorrect) {
                 // Correct
+                sfx.correct();
                 btnElement.classList.remove('bg-gray-800', 'opacity-50');
                 btnElement.classList.add('bg-green-900', 'neon-border-green');
-                score += 100;
-                feedbackEl.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">BENAR! +100</span>`;
+                
+                combo++;
+                const pointsEarned = 100 * combo;
+                score += pointsEarned;
+                
+                feedbackEl.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">BENAR! +${pointsEarned}</span>`;
                 updateStatsUI();
                 
                 setTimeout(() => {
@@ -368,14 +429,18 @@
 
             } else {
                 // Wrong
+                sfx.wrong();
                 btnElement.classList.remove('bg-gray-800', 'opacity-50');
                 btnElement.classList.add('bg-red-900', 'neon-border-red');
                 lives--;
+                combo = 0; // Reset combo
+                
                 feedbackEl.innerHTML = `<span class="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">SALAH!</span>`;
                 updateStatsUI();
 
                 setTimeout(() => {
                     if (lives <= 0) {
+                        sfx.gameOver();
                         endGame();
                     } else {
                         loadNextQuestion();
@@ -402,6 +467,18 @@
                 heartString += (i < lives) ? "❤️" : "🖤";
             }
             livesEl.innerText = heartString;
+            
+            // Combo UI
+            if(combo > 1) {
+                comboDisplay.classList.remove('hidden', 'opacity-0');
+                comboCountEl.innerText = combo;
+                // Add pop animation class temporarily
+                comboDisplay.classList.add('scale-125');
+                setTimeout(() => comboDisplay.classList.remove('scale-125'), 200);
+            } else {
+                comboDisplay.classList.add('opacity-0');
+                setTimeout(() => comboDisplay.classList.add('hidden'), 300);
+            }
         }
 
         function showScreen(screenName) {
@@ -414,6 +491,7 @@
         btnRestart.addEventListener('click', startGame);
 
         btnPlayPreview.addEventListener('click', () => {
+            sfx.click();
             // Start audio
             audioPlayer.volume = 0.5;
             audioPlayer.play().then(() => {
