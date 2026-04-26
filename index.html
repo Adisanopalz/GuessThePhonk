@@ -1,1 +1,444 @@
-sigma 67
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guess The Phonk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background-color: #0a0a0a;
+            color: #fff;
+            background-image: radial-gradient(circle at 50% 50%, #1a0b2e 0%, #0a0a0a 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        h1, h2, .teko-font {
+            font-family: 'Teko', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px #d946ef, 0 0 20px #d946ef, 0 0 30px #d946ef;
+        }
+
+        .neon-border {
+            box-shadow: 0 0 10px #d946ef, inset 0 0 10px #d946ef;
+            border: 2px solid #d946ef;
+        }
+
+        .neon-border-green {
+            box-shadow: 0 0 10px #22c55e, inset 0 0 10px #22c55e;
+            border: 2px solid #22c55e;
+        }
+
+        .neon-border-red {
+            box-shadow: 0 0 10px #ef4444, inset 0 0 10px #ef4444;
+            border: 2px solid #ef4444;
+        }
+
+        .visualizer {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            height: 60px;
+            gap: 4px;
+        }
+
+        .bar {
+            width: 8px;
+            background-color: #d946ef;
+            border-radius: 4px 4px 0 0;
+            animation: bounce 0.5s infinite alternate;
+        }
+
+        .bar:nth-child(1) { animation-delay: 0.1s; }
+        .bar:nth-child(2) { animation-delay: 0.3s; }
+        .bar:nth-child(3) { animation-delay: 0.0s; }
+        .bar:nth-child(4) { animation-delay: 0.4s; }
+        .bar:nth-child(5) { animation-delay: 0.2s; }
+        .bar:nth-child(6) { animation-delay: 0.5s; }
+
+        @keyframes bounce {
+            0% { height: 10px; }
+            100% { height: 60px; }
+        }
+
+        .paused .bar {
+            animation-play-state: paused;
+            height: 10px;
+        }
+
+        .btn-option {
+            transition: all 0.2s ease;
+        }
+        
+        .btn-option:hover:not(:disabled) {
+            transform: scale(1.02);
+            background-color: rgba(217, 70, 239, 0.2);
+        }
+
+        /* Glitch effect for title */
+        .glitch {
+            position: relative;
+        }
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.8;
+        }
+        .glitch::before {
+            left: 2px;
+            text-shadow: -2px 0 red;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+        .glitch::after {
+            left: -2px;
+            text-shadow: -2px 0 blue;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim2 5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { clip: rect(10px, 9999px, 83px, 0); }
+            20% { clip: rect(61px, 9999px, 20px, 0); }
+            40% { clip: rect(31px, 9999px, 12px, 0); }
+            60% { clip: rect(98px, 9999px, 55px, 0); }
+            80% { clip: rect(15px, 9999px, 79px, 0); }
+            100% { clip: rect(44px, 9999px, 22px, 0); }
+        }
+        @keyframes glitch-anim2 {
+            0% { clip: rect(65px, 9999px, 100px, 0); }
+            20% { clip: rect(12px, 9999px, 50px, 0); }
+            40% { clip: rect(89px, 9999px, 30px, 0); }
+            60% { clip: rect(45px, 9999px, 80px, 0); }
+            80% { clip: rect(20px, 9999px, 10px, 0); }
+            100% { clip: rect(90px, 9999px, 60px, 0); }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4">
+
+    <!-- Audio Element (Hidden) -->
+    <audio id="audio-player"></audio>
+
+    <div class="w-full max-w-2xl bg-black/50 backdrop-blur-md rounded-2xl p-6 neon-border relative shadow-2xl">
+        
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-5xl md:text-7xl font-bold text-fuchsia-500 glitch neon-text mb-2" data-text="GUESS THE PHONK">GUESS THE PHONK</h1>
+            <p class="text-sm text-gray-400">Dengarkan preview lagunya dan tebak judul/artisnya!</p>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="screen-loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-fuchsia-500 mx-auto mb-4"></div>
+            <p class="text-xl animate-pulse text-fuchsia-300">Menarik Data Phonk dari API...</p>
+            <p class="text-xs text-gray-500 mt-2">Mungkin butuh beberapa detik.</p>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="screen-start" class="hidden text-center py-12">
+            <p class="mb-6 text-lg">Siap menguji pengetahuan Phonk kamu?</p>
+            <button id="btn-start" class="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-4 px-10 rounded-full text-2xl teko-font tracking-wider transition-all transform hover:scale-110 neon-border">
+                MULAI MAIN
+            </button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="screen-game" class="hidden">
+            <!-- Stats -->
+            <div class="flex justify-between items-center mb-6 bg-gray-900/80 p-3 rounded-lg border border-fuchsia-900">
+                <div class="text-lg">Skor: <span id="score" class="text-fuchsia-400 font-bold text-2xl teko-font">0</span></div>
+                <div class="text-lg">Nyawa: <span id="lives" class="text-red-500 text-xl">❤️❤️❤️</span></div>
+            </div>
+
+            <!-- Player Area -->
+            <div class="bg-gray-900 rounded-xl p-6 mb-6 flex flex-col items-center justify-center border border-gray-800 relative min-h-[150px]">
+                
+                <button id="btn-play-preview" class="absolute z-10 bg-fuchsia-600 text-white rounded-full h-16 w-16 flex items-center justify-center hover:bg-fuchsia-500 transition-transform hover:scale-110 neon-border">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+
+                <div id="visualizer-container" class="visualizer paused opacity-50 transition-opacity duration-300">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+                <p id="audio-status" class="text-xs text-gray-400 mt-4">Klik tombol play untuk mendengar lagu</p>
+            </div>
+
+            <!-- Options (Hidden until audio plays) -->
+            <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-0 pointer-events-none transition-opacity duration-500">
+                <!-- Buttons injected by JS -->
+            </div>
+
+            <!-- Feedback -->
+            <div id="feedback" class="mt-6 text-center text-xl font-bold h-8"></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="screen-game-over" class="hidden text-center py-8">
+            <h2 class="text-6xl text-red-500 mb-2 neon-text teko-font">GAME OVER</h2>
+            <p class="text-xl mb-6">Phonk Knowledge kamu kurang dalam!</p>
+            
+            <div class="bg-gray-900 inline-block p-6 rounded-xl border border-fuchsia-800 mb-8">
+                <p class="text-gray-400 mb-1">Skor Akhir</p>
+                <p class="text-6xl text-fuchsia-500 teko-font" id="final-score">0</p>
+            </div>
+
+            <br>
+            <button id="btn-restart" class="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 px-8 rounded-full text-xl teko-font transition-all hover:scale-105 neon-border">
+                MAIN LAGI
+            </button>
+        </div>
+
+    </div>
+
+    <!-- API Info -->
+    <div class="mt-8 text-center text-xs text-gray-600 max-w-md">
+        <p>Menggunakan iTunes Search API untuk preview lagu 30 detik gratis. Membutuhkan koneksi internet.</p>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let songs = [];
+        let currentCorrectSong = null;
+        let score = 0;
+        let lives = 3;
+        let isPlaying = false;
+        let optionsLocked = false;
+
+        // --- DOM Elements ---
+        const screens = {
+            loading: document.getElementById('screen-loading'),
+            start: document.getElementById('screen-start'),
+            game: document.getElementById('screen-game'),
+            gameOver: document.getElementById('screen-game-over')
+        };
+        
+        const audioPlayer = document.getElementById('audio-player');
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+        const btnPlayPreview = document.getElementById('btn-play-preview');
+        const visualizer = document.getElementById('visualizer-container');
+        const audioStatus = document.getElementById('audio-status');
+        const optionsContainer = document.getElementById('options-container');
+        const feedbackEl = document.getElementById('feedback');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const finalScoreEl = document.getElementById('final-score');
+
+        // --- Init & Fetch Data ---
+        async function fetchPhonkData() {
+            try {
+                // Search for phonk, drift phonk, etc. We use a large limit to get variety
+                const searchTerm = encodeURIComponent("drift phonk");
+                const url = `https://itunes.apple.com/search?term=${searchTerm}&media=music&limit=150`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                // Filter only songs that have a previewUrl
+                songs = data.results.filter(track => track.previewUrl && track.trackName);
+                
+                if(songs.length < 10) {
+                    throw new Error("Tidak cukup lagu ditemukan.");
+                }
+
+                showScreen('start');
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                screens.loading.innerHTML = `
+                    <p class="text-red-500 text-xl mb-2">Gagal mengambil data lagu.</p>
+                    <p class="text-sm text-gray-400">Pastikan koneksi internet jalan atau coba lagi nanti.</p>
+                    <button onclick="location.reload()" class="mt-4 px-4 py-2 border border-fuchsia-500 rounded text-fuchsia-500 hover:bg-fuchsia-900">Muat Ulang</button>
+                `;
+            }
+        }
+
+        // --- Game Logic ---
+        function startGame() {
+            score = 0;
+            lives = 3;
+            updateStatsUI();
+            showScreen('game');
+            loadNextQuestion();
+        }
+
+        function loadNextQuestion() {
+            optionsLocked = false;
+            feedbackEl.innerText = "";
+            feedbackEl.className = "mt-6 text-center text-xl font-bold h-8";
+            optionsContainer.innerHTML = "";
+            optionsContainer.classList.add("opacity-0", "pointer-events-none");
+            
+            // Reset Audio UI
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            btnPlayPreview.style.display = "flex";
+            visualizer.classList.add("paused", "opacity-50");
+            visualizer.classList.remove("opacity-100");
+            audioStatus.innerText = "Klik tombol play untuk mendengar lagu";
+
+            // Pick 1 correct song
+            currentCorrectSong = getRandomSong();
+            audioPlayer.src = currentCorrectSong.previewUrl;
+
+            // Pick 3 wrong unique songs
+            let options = [currentCorrectSong];
+            while (options.length < 4) {
+                let randomSong = getRandomSong();
+                // Ensure no duplicate titles in options
+                if (!options.find(s => s.trackName === randomSong.trackName)) {
+                    options.push(randomSong);
+                }
+            }
+
+            // Shuffle options
+            options = options.sort(() => Math.random() - 0.5);
+
+            // Create buttons
+            options.forEach((song, index) => {
+                const btn = document.createElement('button');
+                btn.className = "btn-option bg-gray-800 border-2 border-gray-700 text-left p-4 rounded-xl flex flex-col justify-center min-h-[80px]";
+                
+                // Truncate long names slightly
+                const cleanName = song.trackName.replace(/(\(feat\..*\)|\[.*\])/i, '').trim();
+                
+                btn.innerHTML = `
+                    <span class="font-bold text-fuchsia-400 truncate w-full block">${cleanName}</span>
+                    <span class="text-xs text-gray-400 truncate w-full block">${song.artistName}</span>
+                `;
+                
+                btn.onclick = () => handleGuess(song, btn);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function handleGuess(selectedSong, btnElement) {
+            if (optionsLocked) return;
+            optionsLocked = true;
+            audioPlayer.pause();
+            visualizer.classList.add("paused");
+
+            const isCorrect = selectedSong.trackId === currentCorrectSong.trackId;
+            const allButtons = document.querySelectorAll('.btn-option');
+
+            // Highlight answers
+            allButtons.forEach(btn => {
+                btn.classList.remove('border-gray-700', 'hover:bg-gray-700');
+                btn.classList.add('opacity-50');
+                
+                const songTitle = btn.querySelector('.font-bold').innerText;
+                const correctTitle = currentCorrectSong.trackName.replace(/(\(feat\..*\)|\[.*\])/i, '').trim();
+
+                if (songTitle === correctTitle) {
+                    btn.classList.remove('bg-gray-800', 'opacity-50');
+                    btn.classList.add('bg-green-900', 'neon-border-green');
+                }
+            });
+
+            if (isCorrect) {
+                // Correct
+                btnElement.classList.remove('bg-gray-800', 'opacity-50');
+                btnElement.classList.add('bg-green-900', 'neon-border-green');
+                score += 100;
+                feedbackEl.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">BENAR! +100</span>`;
+                updateStatsUI();
+                
+                setTimeout(() => {
+                    loadNextQuestion();
+                }, 2000);
+
+            } else {
+                // Wrong
+                btnElement.classList.remove('bg-gray-800', 'opacity-50');
+                btnElement.classList.add('bg-red-900', 'neon-border-red');
+                lives--;
+                feedbackEl.innerHTML = `<span class="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">SALAH!</span>`;
+                updateStatsUI();
+
+                setTimeout(() => {
+                    if (lives <= 0) {
+                        endGame();
+                    } else {
+                        loadNextQuestion();
+                    }
+                }, 2000);
+            }
+        }
+
+        function endGame() {
+            finalScoreEl.innerText = score;
+            showScreen('gameOver');
+        }
+
+        // --- Helpers ---
+        function getRandomSong() {
+            const randomIndex = Math.floor(Math.random() * songs.length);
+            return songs[randomIndex];
+        }
+
+        function updateStatsUI() {
+            scoreEl.innerText = score;
+            let heartString = "";
+            for(let i=0; i<3; i++) {
+                heartString += (i < lives) ? "❤️" : "🖤";
+            }
+            livesEl.innerText = heartString;
+        }
+
+        function showScreen(screenName) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[screenName].classList.remove('hidden');
+        }
+
+        // --- Event Listeners ---
+        btnStart.addEventListener('click', startGame);
+        btnRestart.addEventListener('click', startGame);
+
+        btnPlayPreview.addEventListener('click', () => {
+            // Start audio
+            audioPlayer.volume = 0.5;
+            audioPlayer.play().then(() => {
+                btnPlayPreview.style.display = "none";
+                visualizer.classList.remove("paused", "opacity-50");
+                visualizer.classList.add("opacity-100");
+                audioStatus.innerText = "Menebak dalam 30 detik...";
+                
+                // Show options
+                optionsContainer.classList.remove("opacity-0", "pointer-events-none");
+            }).catch(e => {
+                console.error("Audio play blocked:", e);
+                audioStatus.innerText = "Browser memblokir audio. Coba klik lagi.";
+            });
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            visualizer.classList.add("paused", "opacity-50");
+            visualizer.classList.remove("opacity-100");
+            audioStatus.innerText = "Waktu habis! Pilih jawabanmu.";
+        });
+
+        // --- Start App ---
+        fetchPhonkData();
+
+    </script>
+</body>
+</html>
