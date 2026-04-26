@@ -124,14 +124,48 @@
             80% { clip: rect(20px, 9999px, 10px, 0); }
             100% { clip: rect(90px, 9999px, 60px, 0); }
         }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+        .shake-anim {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        .synthwave-grid {
+            position: fixed;
+            bottom: 0;
+            left: -50%;
+            width: 200%;
+            height: 50vh;
+            background-image: 
+                linear-gradient(to top, rgba(217, 70, 239, 0.3) 2px, transparent 2px), 
+                linear-gradient(to right, rgba(217, 70, 239, 0.3) 2px, transparent 2px);
+            background-size: 60px 60px;
+            transform: perspective(600px) rotateX(75deg);
+            transform-origin: bottom center;
+            animation: playGrid 2s linear infinite;
+            z-index: -1;
+            -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1), rgba(0,0,0,0));
+            mask-image: linear-gradient(to top, rgba(0,0,0,1), rgba(0,0,0,0));
+        }
+        @keyframes playGrid {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 60px; }
+        }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center p-4">
 
+    <!-- Background Grid -->
+    <div class="synthwave-grid"></div>
+
     <!-- Audio Element (Hidden) -->
     <audio id="audio-player"></audio>
 
-    <div class="w-full max-w-2xl bg-black/50 backdrop-blur-md rounded-2xl p-6 neon-border relative shadow-2xl">
+    <div id="game-box" class="w-full max-w-2xl bg-black/60 backdrop-blur-md rounded-2xl p-6 neon-border relative shadow-2xl transition-all duration-300">
         
         <!-- Header -->
         <div class="text-center mb-8">
@@ -183,7 +217,13 @@
                     <div class="bar"></div>
                     <div class="bar"></div>
                 </div>
-                <p id="audio-status" class="text-xs text-gray-400 mt-4">Klik tombol play untuk mendengar lagu</p>
+                
+                <!-- Progress Bar -->
+                <div class="w-full max-w-md bg-gray-800 h-1.5 mt-6 rounded-full overflow-hidden border border-gray-700">
+                    <div id="audio-progress" class="bg-fuchsia-500 h-full w-0 shadow-[0_0_10px_#d946ef]"></div>
+                </div>
+
+                <p id="audio-status" class="text-xs text-gray-400 mt-3">Klik tombol play untuk mendengar lagu</p>
             </div>
 
             <!-- Options (Hidden until audio plays) -->
@@ -198,9 +238,14 @@
         <!-- Game Over Screen -->
         <div id="screen-game-over" class="hidden text-center py-8">
             <h2 class="text-6xl text-red-500 mb-2 neon-text teko-font">GAME OVER</h2>
-            <p class="text-xl mb-6">Phonk Knowledge kamu kurang sigma!</p>
+            <p class="text-xl mb-4">Phonk Knowledge kamu kurang sigma!</p>
             
-            <div class="bg-gray-900 inline-block p-6 rounded-xl border border-fuchsia-800 mb-8">
+            <div class="my-6">
+                <p class="text-gray-400 mb-2">Pangkat Kamu:</p>
+                <h3 id="final-rank" class="text-4xl md:text-5xl font-bold teko-font tracking-wider uppercase drop-shadow-lg"></h3>
+            </div>
+            
+            <div class="bg-gray-900 inline-block p-6 rounded-xl border border-fuchsia-800 mb-8 w-64">
                 <p class="text-gray-400 mb-1">Skor Akhir</p>
                 <p class="text-6xl text-fuchsia-500 teko-font" id="final-score">0</p>
             </div>
@@ -275,6 +320,9 @@
         const comboCountEl = document.getElementById('combo-count');
         const livesEl = document.getElementById('lives');
         const finalScoreEl = document.getElementById('final-score');
+        const finalRankEl = document.getElementById('final-rank');
+        const audioProgress = document.getElementById('audio-progress');
+        const gameBox = document.getElementById('game-box');
 
         // --- Init & Fetch Data ---
         async function fetchPhonkData() {
@@ -344,6 +392,7 @@
             // Reset Audio UI
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
+            audioProgress.style.width = "0%";
             btnPlayPreview.style.display = "flex";
             visualizer.classList.add("paused", "opacity-50");
             visualizer.classList.remove("opacity-100");
@@ -430,6 +479,11 @@
             } else {
                 // Wrong
                 sfx.wrong();
+                
+                // Shake effect for wrong answer
+                gameBox.classList.add('shake-anim');
+                setTimeout(() => gameBox.classList.remove('shake-anim'), 400);
+
                 btnElement.classList.remove('bg-gray-800', 'opacity-50');
                 btnElement.classList.add('bg-red-900', 'neon-border-red');
                 lives--;
@@ -451,6 +505,33 @@
 
         function endGame() {
             finalScoreEl.innerText = score;
+            
+            // Evaluasi Pangkat / Rank
+            let rankText = "";
+            let rankColor = "";
+            
+            if (score === 0) {
+                rankText = "Beta NPC 🤡";
+                rankColor = "text-gray-500";
+            } else if (score < 500) {
+                rankText = "Kroco Sigma 🚶‍♂️";
+                rankColor = "text-blue-400";
+            } else if (score < 1000) {
+                rankText = "Sigma Pemula 🤫";
+                rankColor = "text-green-400";
+            } else if (score < 2000) {
+                rankText = "GigaChad 🗿";
+                rankColor = "text-yellow-400";
+            } else if (score < 4000) {
+                rankText = "Raja Sigma 👑";
+                rankColor = "text-orange-500";
+            } else {
+                rankText = "Phonk God 😈🔥";
+                rankColor = "text-red-500 neon-text";
+            }
+            
+            finalRankEl.innerHTML = `<span class="${rankColor}">${rankText}</span>`;
+            
             showScreen('gameOver');
         }
 
@@ -506,6 +587,14 @@
                 console.error("Audio play blocked:", e);
                 audioStatus.innerText = "Browser memblokir audio. Coba klik lagi.";
             });
+        });
+
+        // Update Progress bar as audio plays
+        audioPlayer.addEventListener('timeupdate', () => {
+            if(audioPlayer.duration) {
+                const percentage = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                audioProgress.style.width = percentage + '%';
+            }
         });
 
         audioPlayer.addEventListener('ended', () => {
